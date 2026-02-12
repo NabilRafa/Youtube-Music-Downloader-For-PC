@@ -15,6 +15,7 @@ Simple desktop app untuk download dan convert video YouTube ke MP3 menggunakan P
 ✅ Supported
 
 * YouTube (youtube.com)
+* Youtube Watch/Playlist (youtube.com/watch?v=)
 * YouTube short links (youtu.be)
 
 ❌ Not Supported (For Now)
@@ -241,7 +242,7 @@ Downloads\YouTube_Audio
 
 * Python 3.10+
 * yt-dlp
-* FFmpeg (WAJIB untuk convert ke MP3)
+* FFmpeg (REQUIRED untuk convert ke MP3)
 
 ---
 
