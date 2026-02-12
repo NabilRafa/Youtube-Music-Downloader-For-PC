@@ -10,6 +10,19 @@
 
 Simple desktop app untuk download dan convert video YouTube ke MP3 menggunakan Python + Tkinter + yt-dlp.
 
+## 🌐 Platform Support
+
+✅ Supported
+
+* YouTube (youtube.com)
+* YouTube short links (youtu.be)
+
+❌ Not Supported (For Now)
+
+* YouTube Music
+* Spotify
+* Other streaming platforms
+
 ## ✨ Features
 
 * GUI sederhana dan ringan
