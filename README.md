@@ -69,9 +69,7 @@ Cukup klik file .exe nya :)
 
 Download file:
 
-```
-Quick_Audio - v2.rar
-```
+[Quick_Audio - v2.rar](https://github.com/NabilRafa/Youtube-Music-Downloader-For-PC/releases/tag/v2.0)
 
 ### 2️⃣ Jalankan Aplikasi
 
@@ -174,9 +172,7 @@ Just double click the `.exe` file :)
 
 Download the file:
 
-```
-Quick_Audio - v2.rar
-```
+https://github.com/NabilRafa/Youtube-Music-Downloader-For-PC/releases/tag/v2.0
 
 ### 2️⃣ Run the Application
 
