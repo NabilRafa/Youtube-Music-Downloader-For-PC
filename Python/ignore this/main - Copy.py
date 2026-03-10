@@ -23,6 +23,12 @@ except ImportError:
 def get_ffmpeg_path():
     if getattr(sys, 'frozen', False):
         base_path = os.path.dirname(sys.executable)
+        
+        if hasattr(sys, '_MEIPASS'):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.join(os.path.dirname(sys.executable), '_internal')
+
     else:
         base_path = os.path.dirname(os.path.abspath(__file__))
 

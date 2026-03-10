@@ -57,9 +57,29 @@ class YouTubeDownloader:
         os.makedirs(self.download_path, exist_ok=True)
 
         self.video_duration = 0
+        self._scroll_canvases = []  # populated by _make_scrollable_panel
 
         # CHANGED line 59: setup_ui replaced with setup_tabs
         self.setup_tabs()
+
+    def _on_tab_changed(self, event):
+        """Bind mousewheel to the scroll canvas of the currently visible tab."""
+        self.root.unbind_all("<MouseWheel>")
+        try:
+            current = self.notebook.nametowidget(self.notebook.select())
+        except Exception:
+            return
+        for sc in self._scroll_canvases:
+            # Check if this canvas lives inside the active tab frame
+            w = sc
+            while w is not None:
+                if w is current:
+                    self.root.bind_all("<MouseWheel>", sc._wheel_handler)
+                    return
+                try:
+                    w = w.master
+                except Exception:
+                    break
 
     # ADDED: new method to create notebook/tab container
     def setup_tabs(self):
@@ -97,18 +117,54 @@ class YouTubeDownloader:
         self.setup_video_ui()
         self.setup_audio_to_video_ui()
 
+        # Route mousewheel to whichever tab is currently active
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+        self.root.after(100, lambda: self._on_tab_changed(None))
+
+    def _make_scrollable_panel(self, parent):
+        """Return (scroll_canvas, inner_frame) with auto-width binding.
+        Mousewheel is routed via NotebookTabChanged so only the active
+        tab's canvas scrolls — avoids bind_all conflicts between panels.
+        """
+        sc = tk.Canvas(parent, borderwidth=0, highlightthickness=0)
+        sb = ttk.Scrollbar(parent, orient="vertical", command=sc.yview)
+        inner = tk.Frame(sc)
+
+        def _on_frame(e):
+            sc.configure(scrollregion=sc.bbox("all"))
+        def _on_canvas(e):
+            sc.itemconfig(win_id, width=e.width)
+        def _on_wheel(e):
+            sc.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        inner.bind("<Configure>", _on_frame)
+        win_id = sc.create_window((0, 0), window=inner, anchor="nw")
+        sc.bind("<Configure>", _on_canvas)
+        sc.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        sc.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Store the wheel handler on the canvas so the tab-switch
+        # callback can look it up later.
+        sc._wheel_handler = _on_wheel
+        self._scroll_canvases.append(sc)
+        return sc, inner
+
     # CHANGED line 61: method renamed from setup_ui to setup_audio_ui, parent changed from self.root to self.audio_frame
     def setup_audio_ui(self):
-        main = self.audio_frame
+        _, inner = self._make_scrollable_panel(self.audio_frame)
+        PAD = 20
 
-        tk.Label(main, text="YouTube Link:", font=("Arial", 11)).pack(anchor=tk.W)
+        tk.Label(inner, text="YouTube Link:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(15, 0))
 
-        self.link_entry = tk.Entry(main, font=("Arial", 11))
-        self.link_entry.pack(fill=tk.X, pady=(5, 15))
+        self.link_entry = tk.Entry(inner, font=("Arial", 11))
+        self.link_entry.pack(fill=tk.X, padx=PAD, pady=(5, 15))
         self.link_entry.bind("<Return>", lambda e: self.start_download())
 
         # ===== FORMAT OPTIONS =====
-        tk.Label(main, text="Format Audio:", font=("Arial", 11)).pack(anchor=tk.W)
+        tk.Label(inner, text="Format Audio:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD)
 
         self.format_var = tk.StringVar(value="m4a")
 
@@ -120,18 +176,19 @@ class YouTubeDownloader:
 
         for text, value in formats:
             tk.Radiobutton(
-                main,
+                inner,
                 text=text,
                 variable=self.format_var,
                 value=value,
                 font=("Arial", 10)
-            ).pack(anchor=tk.W)
+            ).pack(anchor=tk.W, padx=PAD)
 
         # ===== LOCATION =====
-        tk.Label(main, text="Download Path:", font=("Arial", 11)).pack(anchor=tk.W, pady=(15,0))
+        tk.Label(inner, text="Download Path:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(15, 0))
 
-        path_frame = tk.Frame(main)
-        path_frame.pack(fill=tk.X, pady=5)
+        path_frame = tk.Frame(inner)
+        path_frame.pack(fill=tk.X, padx=PAD, pady=5)
 
         self.path_entry = tk.Entry(path_frame, font=("Arial", 10))
         self.path_entry.insert(0, self.download_path)
@@ -145,7 +202,7 @@ class YouTubeDownloader:
 
         # ===== DOWNLOAD BUTTON =====
         self.download_btn = tk.Button(
-            main,
+            inner,
             text="⬇ Download Audio",
             command=self.start_download,
             bg="#1a73e8",
@@ -153,33 +210,127 @@ class YouTubeDownloader:
             font=("Arial", 12, "bold"),
             height=2
         )
-        self.download_btn.pack(fill=tk.X, pady=15)
+        self.download_btn.pack(fill=tk.X, padx=PAD, pady=15)
 
-        self.progress = ttk.Progressbar(main, mode='determinate', maximum=100)
-        self.progress.pack(fill=tk.X)
+        self.progress = ttk.Progressbar(inner, mode="determinate", maximum=100)
+        self.progress.pack(fill=tk.X, padx=PAD)
 
         self.status_label = tk.Label(
-            main,
+            inner,
             text="Insert Link and Choose Format.",
             font=("Arial", 10),
             fg="#5f6368",
-            wraplength=550,
-            justify=tk.LEFT
+            wraplength=520,
+            justify=tk.CENTER
         )
-        self.status_label.pack(anchor=tk.W, pady=10)
+        self.status_label.pack(pady=10, padx=PAD)
 
     # ADDED lines below: entire video panel — new method
     def setup_video_ui(self):
-        main = self.video_frame
+        _, inner = self._make_scrollable_panel(self.video_frame)
+        PAD = 20  # uniform horizontal padding for content
 
-        tk.Label(main, text="YouTube Link:", font=("Arial", 11)).pack(anchor=tk.W)
+        # ===== LINK + GET INFO =====
+        tk.Label(inner, text="YouTube Link:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(15, 0))
 
-        self.video_link_entry = tk.Entry(main, font=("Arial", 11))
-        self.video_link_entry.pack(fill=tk.X, pady=(5, 15))
-        self.video_link_entry.bind("<Return>", lambda e: self.start_video_download())
+        link_row = tk.Frame(inner)
+        link_row.pack(fill=tk.X, padx=PAD, pady=(5, 5))
+
+        self.video_link_entry = tk.Entry(link_row, font=("Arial", 11))
+        self.video_link_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.video_link_entry.bind("<Return>", lambda e: self.video_get_info())
+
+        self.video_info_btn = tk.Button(
+            link_row,
+            text="🔍 Get Info",
+            command=self.video_get_info,
+            bg="#34a853", fg="white",
+            font=("Arial", 10, "bold")
+        )
+        self.video_info_btn.pack(side=tk.LEFT, padx=(5, 0))
+
+        # ===== DURATION DISPLAY =====
+        self.video_duration_label = tk.Label(
+            inner,
+            text="Duration: --:--:--",
+            font=("Arial", 10, "bold"),
+            fg="#5f6368"
+        )
+        self.video_duration_label.pack(anchor=tk.W, padx=PAD, pady=(2, 10))
+
+        # ===== TRIM SECTION =====
+        trim_frame = tk.LabelFrame(
+            inner, text="  ✂ Trim (optional)  ",
+            font=("Arial", 10, "bold"), padx=10, pady=8
+        )
+        trim_frame.pack(fill=tk.X, padx=PAD, pady=(0, 10))
+
+        self.video_trim_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            trim_frame,
+            text="Enable trim / partial download",
+            variable=self.video_trim_var,
+            font=("Arial", 10),
+            command=self._video_toggle_trim
+        ).pack(anchor=tk.W)
+
+        # --- Range slider canvas ---
+        self._rs_canvas = tk.Canvas(
+            trim_frame, height=36, bg="#ececec",
+            highlightthickness=1, highlightbackground="#cccccc",
+            cursor="arrow"
+        )
+        self._rs_canvas.pack(fill=tk.X, pady=(10, 4))
+
+        # --- Time inputs: [HH:MM:SS] left, [HH:MM:SS] right ---
+        time_row = tk.Frame(trim_frame)
+        time_row.pack(fill=tk.X, pady=(0, 4))
+
+        self.video_start_entry = tk.Entry(
+            time_row, font=("Arial", 11), width=9,
+            justify=tk.CENTER, relief=tk.SOLID, bd=1
+        )
+        self.video_start_entry.insert(0, "00:00:00")
+        self.video_start_entry.pack(side=tk.LEFT)
+        self.video_start_entry.bind("<FocusOut>", lambda e: self._rs_entry_changed("start"))
+        self.video_start_entry.bind("<Return>",   lambda e: self._rs_entry_changed("start"))
+
+        tk.Frame(time_row).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.video_end_entry = tk.Entry(
+            time_row, font=("Arial", 11), width=9,
+            justify=tk.CENTER, relief=tk.SOLID, bd=1
+        )
+        self.video_end_entry.insert(0, "00:00:00")
+        self.video_end_entry.pack(side=tk.RIGHT)
+        self.video_end_entry.bind("<FocusOut>", lambda e: self._rs_entry_changed("end"))
+        self.video_end_entry.bind("<Return>",   lambda e: self._rs_entry_changed("end"))
+
+        # Internal state
+        self._rs_start_frac = 0.0
+        self._rs_end_frac   = 1.0
+        self._rs_dragging   = None
+        self._rs_enabled    = False
+        self._rs_handle_r   = 10
+        self._rs_track_h    = 6
+        self._rs_pad        = 14
+
+        self._rs_canvas.bind("<Configure>",      lambda e: self._rs_redraw())
+        self._rs_canvas.bind("<ButtonPress-1>",  self._rs_mouse_press)
+        self._rs_canvas.bind("<B1-Motion>",      self._rs_mouse_drag)
+        self._rs_canvas.bind("<ButtonRelease-1>",self._rs_mouse_release)
+
+        self._video_trim_widgets = [
+            self._rs_canvas,
+            self.video_start_entry,
+            self.video_end_entry,
+        ]
+        self._video_toggle_trim()
 
         # ===== RESOLUTION OPTIONS =====
-        tk.Label(main, text="Resolution:", font=("Arial", 11)).pack(anchor=tk.W)
+        tk.Label(inner, text="Resolution:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD)
 
         self.resolution_var = tk.StringVar(value="720")
 
@@ -190,9 +341,11 @@ class YouTubeDownloader:
             ("1080p (Full HD)", "1080"),
         ]
 
+        res_inner = tk.Frame(inner)
+        res_inner.pack(anchor=tk.W, padx=PAD)
         for text, value in resolutions:
             tk.Radiobutton(
-                main,
+                res_inner,
                 text=text,
                 variable=self.resolution_var,
                 value=value,
@@ -200,10 +353,11 @@ class YouTubeDownloader:
             ).pack(anchor=tk.W)
 
         # ===== VIDEO DOWNLOAD PATH =====
-        tk.Label(main, text="Download Path:", font=("Arial", 11)).pack(anchor=tk.W, pady=(15, 0))
+        tk.Label(inner, text="Download Path:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(15, 0))
 
-        video_path_frame = tk.Frame(main)
-        video_path_frame.pack(fill=tk.X, pady=5)
+        video_path_frame = tk.Frame(inner)
+        video_path_frame.pack(fill=tk.X, padx=PAD, pady=5)
 
         self.video_download_path = str(Path.home() / "Downloads" / "YouTube_Video")
         os.makedirs(self.video_download_path, exist_ok=True)
@@ -220,7 +374,7 @@ class YouTubeDownloader:
 
         # ===== VIDEO DOWNLOAD BUTTON =====
         self.video_download_btn = tk.Button(
-            main,
+            inner,
             text="⬇ Download Video",
             command=self.start_video_download,
             bg="#e8341a",
@@ -228,20 +382,20 @@ class YouTubeDownloader:
             font=("Arial", 12, "bold"),
             height=2
         )
-        self.video_download_btn.pack(fill=tk.X, pady=15)
+        self.video_download_btn.pack(fill=tk.X, padx=PAD, pady=15)
 
-        self.video_progress = ttk.Progressbar(main, mode='determinate', maximum=100)
-        self.video_progress.pack(fill=tk.X)
+        self.video_progress = ttk.Progressbar(inner, mode="determinate", maximum=100)
+        self.video_progress.pack(fill=tk.X, padx=PAD)
 
         self.video_status_label = tk.Label(
-            main,
-            text="Insert Link and Choose Resolution.",
+            inner,
+            text="Paste a link and click 🔍 Get Info, or click ⬇ Download directly.",
             font=("Arial", 10),
             fg="#5f6368",
-            wraplength=550,
-            justify=tk.LEFT
+            wraplength=520,
+            justify=tk.CENTER
         )
-        self.video_status_label.pack(anchor=tk.W, pady=10)
+        self.video_status_label.pack(pady=10, padx=PAD)
 
     # ===== AUDIO METHODS (unchanged from original) =====
 
@@ -461,6 +615,211 @@ class YouTubeDownloader:
 
     # ===== VIDEO METHODS (all new) =====
 
+    # ===== RANGE SLIDER HELPERS =====
+
+    def _seconds_to_hms(self, secs):
+        secs = int(secs)
+        return secs // 3600, (secs % 3600) // 60, secs % 60
+
+    def _hms_to_seconds(self, h, m, s):
+        return int(h) * 3600 + int(m) * 60 + int(s)
+
+    def _parse_hms_entry(self, text):
+        """Parse HH:MM:SS string to seconds. Returns 0 on error."""
+        try:
+            parts = text.strip().split(":")
+            if len(parts) == 3:
+                return self._hms_to_seconds(parts[0], parts[1], parts[2])
+            elif len(parts) == 2:
+                return self._hms_to_seconds(0, parts[0], parts[1])
+            else:
+                return int(parts[0])
+        except Exception:
+            return 0
+
+    def _secs_to_entry(self, secs):
+        h, m, s = self._seconds_to_hms(secs)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def _video_toggle_trim(self):
+        enabled = self.video_trim_var.get()
+        self._rs_enabled = enabled
+        state = tk.NORMAL if enabled else tk.DISABLED
+        for w in self._video_trim_widgets:
+            try:
+                w.config(state=state)
+            except Exception:
+                pass
+        self._rs_redraw()
+
+    # ---- Range slider drawing ----
+
+    def _rs_track_range(self):
+        """Return (x0, x1) of drawable track area."""
+        w = self._rs_canvas.winfo_width()
+        if w < 2:
+            w = 400
+        return self._rs_pad + self._rs_handle_r, w - self._rs_pad - self._rs_handle_r
+
+    def _rs_frac_to_x(self, frac):
+        x0, x1 = self._rs_track_range()
+        return x0 + frac * (x1 - x0)
+
+    def _rs_x_to_frac(self, x):
+        x0, x1 = self._rs_track_range()
+        span = x1 - x0
+        if span <= 0:
+            return 0.0
+        return max(0.0, min(1.0, (x - x0) / span))
+
+    def _rs_redraw(self):
+        c = self._rs_canvas
+        c.delete("all")
+        w = c.winfo_width()
+        h = c.winfo_height()
+        if w < 2 or h < 2:
+            return
+
+        cy = h // 2
+        r  = self._rs_handle_r
+        th = self._rs_track_h
+        enabled = self._rs_enabled
+
+        # Full track (grey background)
+        x0, x1 = self._rs_track_range()
+        c.create_rectangle(
+            x0, cy - th//2, x1, cy + th//2,
+            fill="#d0d0d0", outline="#bbbbbb", width=1
+        )
+
+        # Active range (blue fill)
+        sx = self._rs_frac_to_x(self._rs_start_frac)
+        ex = self._rs_frac_to_x(self._rs_end_frac)
+        active_color = "#1a73e8" if enabled else "#90aee8"
+        c.create_rectangle(
+            sx, cy - th//2, ex, cy + th//2,
+            fill=active_color, outline="", width=0
+        )
+
+        # Handles
+        handle_fill   = "#ffffff" if enabled else "#e8e8e8"
+        handle_border = "#888888" if enabled else "#bbbbbb"
+        for fx in [sx, ex]:
+            c.create_oval(
+                fx - r, cy - r, fx + r, cy + r,
+                fill=handle_fill, outline=handle_border, width=2
+            )
+
+    def _rs_mouse_press(self, event):
+        if not self._rs_enabled:
+            return
+        sx = self._rs_frac_to_x(self._rs_start_frac)
+        ex = self._rs_frac_to_x(self._rs_end_frac)
+        r  = self._rs_handle_r + 4   # hit area
+        dist_s = abs(event.x - sx)
+        dist_e = abs(event.x - ex)
+        if dist_s <= r and dist_s <= dist_e:
+            self._rs_dragging = "start"
+        elif dist_e <= r:
+            self._rs_dragging = "end"
+        else:
+            self._rs_dragging = None
+
+    def _rs_mouse_drag(self, event):
+        if not self._rs_enabled or self._rs_dragging is None:
+            return
+        frac = self._rs_x_to_frac(event.x)
+        if self._rs_dragging == "start":
+            self._rs_start_frac = min(frac, self._rs_end_frac - 0.001)
+        else:
+            self._rs_end_frac = max(frac, self._rs_start_frac + 0.001)
+        self._rs_sync_entries()
+        self._rs_redraw()
+
+    def _rs_mouse_release(self, event):
+        self._rs_dragging = None
+
+    def _rs_sync_entries(self):
+        """Slider moved → update text entries."""
+        dur = getattr(self, "_video_total_duration", 0)
+        start_s = int(self._rs_start_frac * dur)
+        end_s   = int(self._rs_end_frac   * dur)
+        self.video_start_entry.delete(0, tk.END)
+        self.video_start_entry.insert(0, self._secs_to_entry(start_s))
+        self.video_end_entry.delete(0, tk.END)
+        self.video_end_entry.insert(0, self._secs_to_entry(end_s))
+
+    def _rs_entry_changed(self, which):
+        """Text entry changed → update slider fraction."""
+        dur = getattr(self, "_video_total_duration", 0)
+        if dur <= 0:
+            return
+        if which == "start":
+            secs = self._parse_hms_entry(self.video_start_entry.get())
+            secs = max(0, min(secs, int(self._rs_end_frac * dur) - 1))
+            self._rs_start_frac = secs / dur
+            self.video_start_entry.delete(0, tk.END)
+            self.video_start_entry.insert(0, self._secs_to_entry(secs))
+        else:
+            secs = self._parse_hms_entry(self.video_end_entry.get())
+            secs = max(int(self._rs_start_frac * dur) + 1, min(secs, dur))
+            self._rs_end_frac = secs / dur
+            self.video_end_entry.delete(0, tk.END)
+            self.video_end_entry.insert(0, self._secs_to_entry(secs))
+        self._rs_redraw()
+
+    def _get_spinbox_seconds(self, which):
+        """Used by download logic to read start/end seconds."""
+        try:
+            if which == "start":
+                return self._parse_hms_entry(self.video_start_entry.get())
+            else:
+                return self._parse_hms_entry(self.video_end_entry.get())
+        except Exception:
+            return 0
+
+    def _update_sliders_for_duration(self, duration):
+        self._video_total_duration = duration
+        h, m, s = self._seconds_to_hms(duration)
+        self.video_duration_label.config(
+            text=f"Duration: {h:02d}:{m:02d}:{s:02d}  ({duration}s)",
+            fg="#1a73e8"
+        )
+        self._rs_start_frac = 0.0
+        self._rs_end_frac   = 1.0
+        self.video_start_entry.delete(0, tk.END)
+        self.video_start_entry.insert(0, "00:00:00")
+        self.video_end_entry.delete(0, tk.END)
+        self.video_end_entry.insert(0, self._secs_to_entry(duration))
+        self._rs_redraw()
+
+    def video_get_info(self):
+        url = self.video_link_entry.get().strip()
+        if not url:
+            messagebox.showwarning("Warning", "Insert YouTube Link first!")
+            return
+        self.video_info_btn.config(state=tk.DISABLED)
+        self.video_status_label.config(text="Fetching info...", fg="#5f6368")
+
+        def _fetch():
+            try:
+                with yt_dlp.YoutubeDL({'quiet': True, 'noplaylist': True}) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    title = info.get('title', 'Unknown')
+                    duration = info.get('duration', 0)
+                self.root.after(0, lambda: self._update_sliders_for_duration(int(duration)))
+                self.root.after(0, lambda: self.video_status_label.config(
+                    text=f"📹  {title}", fg="#202124"
+                ))
+            except Exception as e:
+                self.root.after(0, lambda: self.video_status_label.config(
+                    text=f"Error: {str(e)}", fg="red"
+                ))
+            finally:
+                self.root.after(0, lambda: self.video_info_btn.config(state=tk.NORMAL))
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
     def browse_video_folder(self):
         folder = filedialog.askdirectory()
         if folder:
@@ -477,7 +836,19 @@ class YouTubeDownloader:
 
         self.video_download_path = self.video_path_entry.get()
 
-        thread = threading.Thread(target=self.download_video, args=(url,))
+        trim_start = None
+        trim_end = None
+        if self.video_trim_var.get():
+            trim_start = self._get_spinbox_seconds("start")
+            trim_end = self._get_spinbox_seconds("end")
+            if trim_end <= trim_start:
+                messagebox.showwarning("Warning", "End time must be greater than Start time!")
+                return
+
+        thread = threading.Thread(
+            target=self.download_video,
+            args=(url, trim_start, trim_end)
+        )
         thread.daemon = True
         thread.start()
 
@@ -498,7 +869,7 @@ class YouTubeDownloader:
                 text="Processing / Merging...", fg="#e8341a"
             ))
 
-    def download_video(self, url):
+    def download_video(self, url, trim_start=None, trim_end=None):
         self.root.after(0, lambda: self.video_download_btn.config(state=tk.DISABLED))
         self.root.after(0, lambda: self.video_progress.config(value=0))
         self.root.after(0, lambda: self.video_status_label.config(
@@ -535,6 +906,24 @@ class YouTubeDownloader:
                 'ffmpeg_location': os.path.dirname(ffmpeg_path),
             }
 
+            # ===== TRIM / PARTIAL DOWNLOAD =====
+            if trim_start is not None and trim_end is not None:
+                def _fmt_sec(s):
+                    h, m, sec = self._seconds_to_hms(s)
+                    return f"{h:02d}:{m:02d}:{sec:02d}"
+
+                section_str = f"*{_fmt_sec(trim_start)}-{_fmt_sec(trim_end)}"
+                ydl_opts['download_ranges'] = yt_dlp.utils.download_range_func(
+                    [], [[trim_start, trim_end]]
+                )
+                ydl_opts['force_keyframes_at_cuts'] = True
+
+                start_lbl = _fmt_sec(trim_start)
+                end_lbl   = _fmt_sec(trim_end)
+                self.root.after(0, lambda: self.video_status_label.config(
+                    text=f"Trim mode: {start_lbl} → {end_lbl}", fg="#e8341a"
+                ))
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Unknown')
@@ -564,13 +953,15 @@ class YouTubeDownloader:
     # ===== AUDIO → VIDEO PANEL =====
 
     def setup_audio_to_video_ui(self):
-        main = self.audio_to_video_frame
+        _, inner = self._make_scrollable_panel(self.audio_to_video_frame)
+        PAD = 20
 
         # --- Audio File ---
-        tk.Label(main, text="Audio File (MP3 / M4A / OPUS / WAV):", font=("Arial", 11)).pack(anchor=tk.W)
+        tk.Label(inner, text="Audio File (MP3 / M4A / OPUS / WAV):", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(15, 0))
 
-        audio_row = tk.Frame(main)
-        audio_row.pack(fill=tk.X, pady=(5, 15))
+        audio_row = tk.Frame(inner)
+        audio_row.pack(fill=tk.X, padx=PAD, pady=(5, 15))
 
         self.av_audio_entry = tk.Entry(audio_row, font=("Arial", 10))
         self.av_audio_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -581,24 +972,25 @@ class YouTubeDownloader:
         ).pack(side=tk.LEFT, padx=5)
 
         # --- Background choice ---
-        tk.Label(main, text="Background:", font=("Arial", 11)).pack(anchor=tk.W)
+        tk.Label(inner, text="Background:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD)
 
         self.av_bg_var = tk.StringVar(value="color")
 
         tk.Radiobutton(
-            main, text="Solid Color (black)", variable=self.av_bg_var,
+            inner, text="Solid Color (black)", variable=self.av_bg_var,
             value="color", font=("Arial", 10),
             command=self._av_toggle_bg
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.W, padx=PAD)
 
         tk.Radiobutton(
-            main, text="Custom Image (JPG/PNG)", variable=self.av_bg_var,
+            inner, text="Custom Image (JPG/PNG)", variable=self.av_bg_var,
             value="image", font=("Arial", 10),
             command=self._av_toggle_bg
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.W, padx=PAD)
 
-        img_row = tk.Frame(main)
-        img_row.pack(fill=tk.X, pady=(3, 10))
+        img_row = tk.Frame(inner)
+        img_row.pack(fill=tk.X, padx=PAD, pady=(3, 10))
 
         self.av_img_entry = tk.Entry(img_row, font=("Arial", 10), state=tk.DISABLED)
         self.av_img_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -609,11 +1001,35 @@ class YouTubeDownloader:
         )
         self.av_img_btn.pack(side=tk.LEFT, padx=5)
 
-        # --- Output Path ---
-        tk.Label(main, text="Output Path:", font=("Arial", 11)).pack(anchor=tk.W, pady=(5, 0))
+        # --- Video Quality ---
+        tk.Label(inner, text="Video Quality:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(10, 0))
 
-        out_row = tk.Frame(main)
-        out_row.pack(fill=tk.X, pady=5)
+        self.av_resolution_var = tk.StringVar(value="720")
+
+        av_resolutions = [
+            ("360p", "360"),
+            ("480p", "480"),
+            ("720p (HD)", "720"),
+            ("1080p (Full HD)", "1080"),
+        ]
+
+        res_frame = tk.Frame(inner)
+        res_frame.pack(anchor=tk.W, padx=PAD, pady=(3, 10))
+
+        for text, value in av_resolutions:
+            tk.Radiobutton(
+                res_frame, text=text,
+                variable=self.av_resolution_var,
+                value=value, font=("Arial", 10)
+            ).pack(side=tk.LEFT, padx=(0, 10))
+
+        # --- Output Path ---
+        tk.Label(inner, text="Output Path:", font=("Arial", 11)).pack(
+            anchor=tk.W, padx=PAD, pady=(5, 0))
+
+        out_row = tk.Frame(inner)
+        out_row.pack(fill=tk.X, padx=PAD, pady=5)
 
         self.av_out_path = str(Path.home() / "Downloads" / "YouTube_Audio")
         self.av_out_entry = tk.Entry(out_row, font=("Arial", 10))
@@ -627,22 +1043,22 @@ class YouTubeDownloader:
 
         # --- Convert Button ---
         self.av_convert_btn = tk.Button(
-            main, text="🎬 Convert Audio → Video",
+            inner, text="🎬 Convert Audio → Video",
             command=self.av_start_convert,
             bg="#6a1ab3", fg="white",
             font=("Arial", 12, "bold"), height=2
         )
-        self.av_convert_btn.pack(fill=tk.X, pady=12)
+        self.av_convert_btn.pack(fill=tk.X, padx=PAD, pady=12)
 
-        self.av_progress = ttk.Progressbar(main, mode='determinate', maximum=100)
-        self.av_progress.pack(fill=tk.X)
+        self.av_progress = ttk.Progressbar(inner, mode="determinate", maximum=100)
+        self.av_progress.pack(fill=tk.X, padx=PAD)
 
         self.av_status_label = tk.Label(
-            main, text="Choose an audio file to convert.",
+            inner, text="Choose an audio file to convert.",
             font=("Arial", 10), fg="#5f6368",
-            wraplength=550, justify=tk.LEFT
+            wraplength=520, justify=tk.CENTER
         )
-        self.av_status_label.pack(anchor=tk.W, pady=8)
+        self.av_status_label.pack(pady=8, padx=PAD)
 
     def _av_toggle_bg(self):
         if self.av_bg_var.get() == "image":
@@ -706,9 +1122,18 @@ class YouTubeDownloader:
         base_name = os.path.splitext(os.path.basename(audio_file))[0]
         output_file = os.path.join(out_folder, base_name + ".mp4")
 
+        resolution = self.av_resolution_var.get()
+        resolution_map = {
+            "360": "640x360",
+            "480": "854x480",
+            "720": "1280x720",
+            "1080": "1920x1080",
+        }
+        quality = resolution_map.get(resolution, "1280x720")
+
         thread = threading.Thread(
             target=self.av_convert,
-            args=(audio_file, image_file, output_file, ffmpeg_path)
+            args=(audio_file, image_file, output_file, ffmpeg_path, quality)
         )
         thread.daemon = True
         thread.start()
@@ -723,7 +1148,18 @@ class YouTubeDownloader:
                 text=f"Converting... {p:.1f}%", fg="#6a1ab3"
             ))
 
-    def av_convert(self, audio_file, image_file, output_file, ffmpeg_path):
+    def av_convert(self, audio_file, image_file, output_file, ffmpeg_path, resolution="720"):
+        resolution_map = {
+            "360":  ("640",  "360"),
+            "480":  ("854",  "480"),
+            "720":  ("1280", "720"),
+            "1080": ("1920", "1080"),
+        }
+        vw, vh = resolution_map.get(str(resolution), ("1280", "720"))
+        quality = f"{vw}x{vh}"
+        fps = "30"
+        scale_filter = f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}"
+
         self.root.after(0, lambda: self.av_convert_btn.config(state=tk.DISABLED))
         self.root.after(0, lambda: self.av_progress.config(value=0))
         self.root.after(0, lambda: self.av_status_label.config(
@@ -760,6 +1196,8 @@ class YouTubeDownloader:
                     '-i', audio_file,
                     '-c:v', 'libx264',
                     '-tune', 'stillimage',
+                    '-vf', scale_filter,
+                    '-r', fps,
                     '-c:a', 'aac',
                     '-b:a', '192k',
                     '-pix_fmt', 'yuv420p',
@@ -772,8 +1210,9 @@ class YouTubeDownloader:
                 cmd = [
                     ffmpeg_path,
                     '-f', 'lavfi',
-                    '-i', 'color=c=black:s=1280x720:r=1',
+                    '-i', f'color=c=black:s={quality}:r={fps}',
                     '-i', audio_file,
+                    '-r', fps,
                     '-c:v', 'libx264',
                     '-tune', 'stillimage',
                     '-c:a', 'aac',
