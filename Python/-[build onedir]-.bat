@@ -9,10 +9,10 @@ pyinstaller ^
 --distpath Build ^
 --workpath Build\BuildTemp ^
 --name "Quick_Audio" ^
-main.py
+main_update.py
 
 rmdir /s /q Build\BuildTemp
 
 echo.
-echo Build selesai. Tekan tombol apa saja untuk keluar...
+echo Build finish. Press anything to exit...
 pause

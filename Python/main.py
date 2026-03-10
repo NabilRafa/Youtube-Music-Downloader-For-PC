@@ -12,20 +12,28 @@ from pathlib import Path
 import threading
 import sys
 
-#Search ffmpeg
-def resource_path(filename):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, filename)
-    return os.path.join(os.path.abspath("."), filename)
-
-ffmpeg_path = resource_path("ffmpeg.exe")
-ffprobe_path = resource_path("ffprobe.exe")
-
 try:
     import yt_dlp
 except ImportError:
     print("yt-dlp not installed! pip install yt-dlp")
     exit()
+
+
+# ===== OPTIONAL FFMPEG DETECTION =====
+def get_ffmpeg_path():
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+        
+        if hasattr(sys, '_MEIPASS'):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.join(os.path.dirname(sys.executable), '_internal')
+
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    ffmpeg_path = os.path.join(base_path, "ffmpeg.exe")
+    return ffmpeg_path if os.path.exists(ffmpeg_path) else None
 
 # ===== CENTER WINDOW =====
 def center_window(root, width, height):
@@ -268,12 +276,12 @@ class YouTubeAudioDownloader:
                     ydl.download([url])
 
             elif selected_format == "opus":
-                ffmpeg_path = resource_path("ffmpeg.exe")
+                ffmpeg_path = get_ffmpeg_path()
 
-                if not os.path.exists(ffmpeg_path):
+                if not ffmpeg_path:
                     messagebox.showerror(
-                    "FFmpeg Cannot Be Found",
-                    "FFmpeg not found in bundled application."
+                        "FFmpeg Cannot Be Found",
+                        "OPUS need ffmpeg.exe in application folder."
                     )
                     return
 
@@ -292,12 +300,12 @@ class YouTubeAudioDownloader:
                 self.manual_convert(downloaded_file, selected_format, ffmpeg_path)
 
             elif selected_format == "mp3":
-                ffmpeg_path = resource_path("ffmpeg.exe")
+                ffmpeg_path = get_ffmpeg_path()
 
-                if not os.path.exists(ffmpeg_path):
+                if not ffmpeg_path:
                     messagebox.showerror(
-                    "FFmpeg Cannot Be Found",
-                    "FFmpeg not found in bundled application."
+                        "FFmpeg Cannot Be Found",
+                        "MP3 need ffmpeg.exe in application folder."
                     )
                     return
 
