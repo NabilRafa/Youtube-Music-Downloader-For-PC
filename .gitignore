@@ -8,6 +8,11 @@ __pycache__/
 
 # Ignore build folder
 Build/
+Test/
+
+dist/
+node_modules/
+Build/
 
 # Icon source file
 icon.psd

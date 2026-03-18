@@ -9,7 +9,7 @@ pyinstaller ^
 --distpath Build ^
 --workpath Build\BuildTemp ^
 --name "Quick_Audio" ^
-main_update.py
+main.py
 
 rmdir /s /q Build\BuildTemp
 

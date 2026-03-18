@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>YT Downloader</title>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:     #0d0d0d;
+  --surf:   #1a1a1a;
+  --card:   #222222;
+  --border: #2e2e2e;
+  --accent: #00d4ff;
+  --accent2:#7c3aed;
+  --green:  #22c55e;
+  --red:    #ef4444;
+  --muted:  #666;
+  --text:   #f0f0f0;
+  --text2:  #aaa;
+  --radius: 8px;
+}
+body{
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:var(--bg);color:var(--text);
+  font-size:13px;line-height:1.5;
+  height:100vh;display:flex;flex-direction:column;
+  overflow:hidden;
+  -webkit-app-region:no-drag;
+  user-select:none;
+}
+/* ── Titlebar ──────────────────────────────────────────────── */
+#titlebar{
+  height:42px;background:var(--bg);
+  display:flex;align-items:center;
+  padding:0 16px;
+  -webkit-app-region:drag;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+#titlebar span{font-size:14px;font-weight:700;color:var(--text);letter-spacing:.5px}
+#titlebar .version{font-size:10px;color:var(--muted);margin-left:6px}
+#win-btns{margin-left:auto;display:flex;gap:4px;-webkit-app-region:no-drag}
+.wbtn{
+  width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;
+  background:var(--card);color:var(--text2);font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.wbtn:hover{background:var(--border)}
+#wbtn-close:hover{background:#c0392b;color:#fff}
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+#tabs{
+  display:flex;border-bottom:1px solid var(--border);
+  background:var(--bg);flex-shrink:0;
+}
+.tab{
+  padding:10px 20px;cursor:pointer;font-size:12px;
+  color:var(--muted);border-bottom:2px solid transparent;
+  transition:color .15s,border-color .15s;
+  -webkit-app-region:no-drag;
+}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── Content ───────────────────────────────────────────────── */
+#content{flex:1;overflow:hidden;position:relative}
+.panel{
+  position:absolute;inset:0;overflow-y:auto;
+  padding:20px;display:none;
+}
+.panel.active{display:block}
+.panel::-webkit-scrollbar{width:4px}
+.panel::-webkit-scrollbar-track{background:transparent}
+.panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ── Form elements ─────────────────────────────────────────── */
+.section-label{
+  font-size:10px;font-weight:700;letter-spacing:.8px;
+  color:var(--muted);text-transform:uppercase;
+  margin-bottom:6px;margin-top:18px;
+  display:flex;align-items:center;gap:8px;
+}
+.section-label::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+.row{display:flex;gap:6px;align-items:center}
+input[type=text],input[type=url],.entry{
+  flex:1;background:var(--card);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:8px 12px;font-size:13px;font-family:inherit;outline:none;
+  transition:border-color .15s;
+}
+input[type=text]:focus,input[type=url]:focus,.entry:focus{
+  border-color:var(--accent);
+}
+input:disabled,.entry:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn{
+  padding:8px 14px;border:none;border-radius:var(--radius);
+  cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;
+  transition:opacity .15s,transform .1s;white-space:nowrap;
+}
+.btn:hover{opacity:.85}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-ghost{background:var(--card);color:var(--text2);border:1px solid var(--border)}
+.btn-accent{background:var(--accent);color:#0a0a0a}
+.btn-red{background:#dc2626;color:#fff}
+.btn-purple{background:var(--accent2);color:#fff}
+.btn-info{background:#1e3a4a;color:var(--accent);border:1px solid #1a4a5a}
+.btn-lg{
+  width:100%;padding:13px;font-size:14px;border-radius:10px;margin-top:16px;
+}
+
+/* ── Radios ────────────────────────────────────────────────── */
+.radio-group{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.radio-opt{
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:6px 12px;font-size:12px;
+  transition:border-color .15s,background .15s;
+}
+.radio-opt:has(input:checked){
+  border-color:var(--accent);background:#0d2830;
+}
+.radio-opt input{display:none}
+.radio-opt .dot{
+  width:8px;height:8px;border-radius:50%;background:var(--border);
+  transition:background .15s;
+}
+.radio-opt:has(input:checked) .dot{background:var(--accent)}
+
+/* ── Progress ──────────────────────────────────────────────── */
+.prog-wrap{margin-top:10px;position:relative;height:4px;
+  background:var(--card);border-radius:2px;overflow:hidden}
+.prog-bar{
+  height:100%;width:0%;border-radius:2px;
+  background:var(--accent);transition:width .2s linear;
+}
+.prog-bar.red{background:#dc2626}
+.prog-bar.purple{background:var(--accent2)}
+.status{
+  font-size:11px;color:var(--muted);margin-top:6px;
+  min-height:18px;text-align:center;
+}
+.status.ok{color:var(--green)}
+.status.err{color:var(--red)}
+.status.active{color:var(--text2)}
+
+/* ── Info block ────────────────────────────────────────────── */
+.info-block{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 14px;margin-top:8px;
+  display:none;
+}
+.info-block.visible{display:block}
+.info-title{font-weight:600;color:var(--text);margin-bottom:2px;font-size:13px}
+.info-dur{font-size:11px;color:var(--muted)}
+
+/* ── Trim section ──────────────────────────────────────────── */
+.trim-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:12px 14px;margin-top:8px;
+}
+.trim-toggle{display:flex;align-items:center;gap:8px;cursor:pointer}
+.toggle-switch{
+  width:34px;height:18px;background:var(--border);
+  border-radius:9px;position:relative;transition:background .2s;
+}
+.toggle-switch.on{background:var(--accent)}
+.toggle-knob{
+  width:14px;height:14px;background:#fff;border-radius:50%;
+  position:absolute;top:2px;left:2px;transition:left .2s;
+}
+.toggle-switch.on .toggle-knob{left:18px}
+.trim-controls{margin-top:10px;display:none}
+.trim-controls.visible{display:block}
+canvas#slider{
+  width:100%;height:30px;border-radius:4px;cursor:pointer;
+  display:block;margin-bottom:8px;
+}
+.time-row{display:flex;justify-content:space-between;align-items:center}
+.time-input{
+  width:88px;text-align:center;background:var(--bg);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+  font-size:12px;font-family:inherit;outline:none;
+}
+.time-input:focus{border-color:var(--accent)}
+.time-sep{color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+
+<!-- Titlebar -->
+<div id="titlebar">
+  <span>▶ YT Downloader</span>
+  <span class="version">v5.0</span>
+  <div id="win-btns">
+    <button class="wbtn" onclick="api.minimize()">─</button>
+    <button class="wbtn" onclick="api.maximize()">□</button>
+    <button class="wbtn" id="wbtn-close" onclick="api.close()">✕</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div id="tabs">
+  <div class="tab active" data-tab="audio">🎵&nbsp; Audio</div>
+  <div class="tab" data-tab="video">🎬&nbsp; Video</div>
+  <div class="tab" data-tab="av">🔄&nbsp; Audio → Video</div>
+</div>
+
+<!-- Content -->
+<div id="content">
+
+  <!-- ══ AUDIO PANEL ══ -->
+  <div class="panel active" id="panel-audio">
+    <div class="section-label">YouTube Link</div>
+    <input type="url" id="audio-url" placeholder="https://youtube.com/watch?v=…" />
+
+    <div class="section-label">Format</div>
+    <div class="radio-group" id="audio-fmt-group">
+      <label class="radio-opt"><input type="radio" name="afmt" value="mp3"> <span class="dot"></span> MP3</label>
+      <label class="radio-opt"><input type="radio" name="afmt" value="m4a" checked> <span class="dot"></span> M4A</label>
+      <label class="radio-opt"><input type="radio" name="afmt" value="opus"> <span class="dot"></span> OPUS</label>
+    </div>
+
+    <div class="section-label">Save to</div>
+    <div class="row">
+      <input type="text" id="audio-path" />
+      <button class="btn btn-ghost" onclick="browseTo('audio-path')">Browse</button>
+      <button class="btn btn-ghost" onclick="api.openFolder(document.getElementById('audio-path').value)">↗</button>
+    </div>
+
+    <button class="btn btn-accent btn-lg" id="audio-dl-btn" onclick="doAudioDownload()">
+      ⬇&nbsp; Download Audio
+    </button>
+    <div class="prog-wrap"><div class="prog-bar" id="audio-prog"></div></div>
+    <div class="status" id="audio-status">Paste a link and choose format.</div>
+  </div>
+
+  <!-- ══ VIDEO PANEL ══ -->
+  <div class="panel" id="panel-video">
+    <div class="section-label">YouTube Link</div>
+    <div class="row">
+      <input type="url" id="video-url" placeholder="https://youtube.com/watch?v=…" />
+      <button class="btn btn-info" id="video-info-btn" onclick="doGetInfo()">🔍 Info</button>
+    </div>
+
+    <div class="info-block" id="video-info-block">
+      <div class="info-title" id="video-title">—</div>
+      <div class="info-dur"  id="video-dur">Duration: —</div>
+    </div>
+
+    <!-- Trim -->
+    <div class="trim-card" style="margin-top:10px">
+      <div class="trim-toggle" onclick="toggleTrim()">
+        <div class="toggle-switch" id="trim-switch"><div class="toggle-knob"></div></div>
+        <span style="font-size:12px;color:var(--text2)">Trim / partial download</span>
+      </div>
+      <div class="trim-controls" id="trim-controls">
+        <canvas id="slider" height="30"></canvas>
+        <div class="time-row">
+          <input class="time-input" id="trim-start" value="00:00:00" />
+          <span class="time-sep">→</span>
+          <input class="time-input" id="trim-end"   value="00:00:00" />
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Resolution</div>
+    <div class="radio-group">
+      <label class="radio-opt"><input type="radio" name="vres" value="360"> <span class="dot"></span> 360p</label>
+      <label class="radio-opt"><input type="radio" name="vres" value="480"> <span class="dot"></span> 480p</label>
+      <label class="radio-opt"><input type="radio" name="vres" value="720" checked> <span class="dot"></span> 720p ★</label>
+      <label class="radio-opt"><input type="radio" name="vres" value="1080"> <span class="dot"></span> 1080p</label>
+    </div>
+
+    <div class="section-label">Save to</div>
+    <div class="row">
+      <input type="text" id="video-path" />
+      <button class="btn btn-ghost" onclick="browseTo('video-path')">Browse</button>
+      <button class="btn btn-ghost" onclick="api.openFolder(document.getElementById('video-path').value)">↗</button>
+    </div>
+
+    <button class="btn btn-red btn-lg" id="video-dl-btn" onclick="doVideoDownload()">
+      ⬇&nbsp; Download Video
+    </button>
+    <div class="prog-wrap"><div class="prog-bar red" id="video-prog"></div></div>
+    <div class="status" id="video-status">Paste a link, get info, then download.</div>
+  </div>
+
+  <!-- ══ AV PANEL ══ -->
+  <div class="panel" id="panel-av">
+    <div class="section-label">Audio File (MP3 / M4A / OPUS / WAV)</div>
+    <div class="row">
+      <input type="text" id="av-audio" placeholder="Select audio file…" />
+      <button class="btn btn-ghost" onclick="browseAudioFile()">Browse</button>
+    </div>
+
+    <div class="section-label">Background</div>
+    <div class="radio-group" id="av-bg-group">
+      <label class="radio-opt"><input type="radio" name="avbg" value="color" checked onchange="toggleBgImage()"> <span class="dot"></span> Solid Black</label>
+      <label class="radio-opt"><input type="radio" name="avbg" value="image" onchange="toggleBgImage()"> <span class="dot"></span> Custom Image</label>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <input type="text" id="av-img" placeholder="Select background image (JPG/PNG)…" disabled />
+      <button class="btn btn-ghost" id="av-img-btn" onclick="browseImageFile()" disabled>Browse</button>
+    </div>
+
+    <div class="section-label">Resolution</div>
+    <div class="radio-group">
+      <label class="radio-opt"><input type="radio" name="avres" value="360"> <span class="dot"></span> 360p</label>
+      <label class="radio-opt"><input type="radio" name="avres" value="480"> <span class="dot"></span> 480p</label>
+      <label class="radio-opt"><input type="radio" name="avres" value="720" checked> <span class="dot"></span> 720p ★</label>
+      <label class="radio-opt"><input type="radio" name="avres" value="1080"> <span class="dot"></span> 1080p</label>
+    </div>
+
+    <div class="section-label">Save to</div>
+    <div class="row">
+      <input type="text" id="av-out" />
+      <button class="btn btn-ghost" onclick="browseTo('av-out')">Browse</button>
+      <button class="btn btn-ghost" onclick="api.openFolder(document.getElementById('av-out').value)">↗</button>
+    </div>
+
+    <button class="btn btn-purple btn-lg" id="av-btn" onclick="doAvConvert()">
+      🎬&nbsp; Convert Audio → Video
+    </button>
+    <div class="prog-wrap"><div class="prog-bar purple" id="av-prog"></div></div>
+    <div class="status" id="av-status">Select an audio file to begin.</div>
+  </div>
+
+</div><!-- #content -->
+
+<script>
+// ─── Tab switching ───────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab,.panel').forEach(e => e.classList.remove('active'))
+    t.classList.add('active')
+    document.getElementById('panel-' + t.dataset.tab).classList.add('active')
+  })
+})
+
+// ─── Init defaults ───────────────────────────────────────────────
+;(async () => {
+  const d = await api.getDefaults()
+  document.getElementById('audio-path').value = d.audio
+  document.getElementById('video-path').value = d.video
+  document.getElementById('av-out').value      = d.audio
+})()
+
+// ─── Progress & log listeners ────────────────────────────────────
+api.onProgress(({ type, value }) => {
+  const bar = document.getElementById(type === 'av' ? 'av-prog' :
+              type === 'video' ? 'video-prog' : 'audio-prog')
+  if (bar) bar.style.width = value + '%'
+})
+
+// ─── Helpers ─────────────────────────────────────────────────────
+function setStatus(id, text, cls='') {
+  const el = document.getElementById(id)
+  el.textContent = text
+  el.className = 'status ' + cls
+}
+function setBtn(id, disabled) {
+  document.getElementById(id).disabled = disabled
+}
+function getRadio(name) {
+  return document.querySelector(`input[name="${name}"]:checked`)?.value
+}
+async function browseTo(inputId) {
+  const cur = document.getElementById(inputId).value
+  const dir = await api.browseFolder(cur)
+  if (dir) document.getElementById(inputId).value = dir
+}
+async function browseAudioFile() {
+  const f = await api.browseFile([
+    { name:'Audio', extensions:['mp3','m4a','opus','wav','ogg','flac'] },
+    { name:'All',   extensions:['*'] }
+  ])
+  if (f) document.getElementById('av-audio').value = f
+}
+async function browseImageFile() {
+  const f = await api.browseFile([
+    { name:'Image', extensions:['jpg','jpeg','png'] },
+    { name:'All',   extensions:['*'] }
+  ])
+  if (f) document.getElementById('av-img').value = f
+}
+function toggleBgImage() {
+  const useImg = getRadio('avbg') === 'image'
+  document.getElementById('av-img').disabled      = !useImg
+  document.getElementById('av-img-btn').disabled  = !useImg
+}
+
+// ─── Audio download ───────────────────────────────────────────────
+async function doAudioDownload() {
+  const url  = document.getElementById('audio-url').value.trim()
+  if (!url) { alert('Paste a YouTube URL first!'); return }
+  const fmt  = getRadio('afmt')
+  const save = document.getElementById('audio-path').value.trim()
+  setBtn('audio-dl-btn', true)
+  setStatus('audio-status','Downloading…','active')
+  document.getElementById('audio-prog').style.width = '0%'
+  try {
+    await api.downloadAudio({ url, format:fmt, savePath:save })
+    setStatus('audio-status','Done! ✓','ok')
+    document.getElementById('audio-prog').style.width = '100%'
+  } catch(e) {
+    setStatus('audio-status','Error: ' + e,'err')
+  } finally {
+    setBtn('audio-dl-btn', false)
+  }
+}
+
+// ─── Video info ───────────────────────────────────────────────────
+let videoDuration = 0
+async function doGetInfo() {
+  const url = document.getElementById('video-url').value.trim()
+  if (!url) return
+  setBtn('video-info-btn', true)
+  setStatus('video-status','Fetching info…')
+  try {
+    const info = await api.getInfo(url)
+    videoDuration = info.duration || 0
+    document.getElementById('video-title').textContent = info.title
+    document.getElementById('video-dur').textContent =
+      'Duration: ' + secsToHms(videoDuration) + '  (' + videoDuration + 's)'
+    document.getElementById('video-info-block').classList.add('visible')
+    initSlider(videoDuration)
+    setStatus('video-status','Ready.','active')
+  } catch(e) {
+    setStatus('video-status','Error: ' + e,'err')
+  } finally {
+    setBtn('video-info-btn', false)
+  }
+}
+document.getElementById('video-url').addEventListener('blur', doGetInfo)
+document.getElementById('video-url').addEventListener('keydown', e => { if(e.key==='Enter') doGetInfo() })
+
+// ─── Video download ───────────────────────────────────────────────
+async function doVideoDownload() {
+  const url  = document.getElementById('video-url').value.trim()
+  if (!url) { alert('Paste a YouTube URL first!'); return }
+  const ff = await api.checkFfmpeg()
+  if (!ff) { alert('ffmpeg not found in bin/ folder. Required for video.'); return }
+  const resolution = getRadio('vres')
+  const save = document.getElementById('video-path').value.trim()
+  let trimStart = null, trimEnd = null
+  if (document.getElementById('trim-switch').classList.contains('on')) {
+    trimStart = parseHms(document.getElementById('trim-start').value)
+    trimEnd   = parseHms(document.getElementById('trim-end').value)
+    if (trimEnd <= trimStart) { alert('End time must be after start!'); return }
+  }
+  setBtn('video-dl-btn', true)
+  setStatus('video-status','Downloading…','active')
+  document.getElementById('video-prog').style.width = '0%'
+  try {
+    await api.downloadVideo({ url, resolution, savePath:save, trimStart, trimEnd })
+    setStatus('video-status','Done! ✓','ok')
+    document.getElementById('video-prog').style.width = '100%'
+  } catch(e) {
+    setStatus('video-status','Error: ' + e,'err')
+  } finally {
+    setBtn('video-dl-btn', false)
+  }
+}
+
+// ─── AV convert ───────────────────────────────────────────────────
+async function doAvConvert() {
+  const audioFile = document.getElementById('av-audio').value.trim()
+  if (!audioFile) { alert('Select an audio file first!'); return }
+  const ff = await api.checkFfmpeg()
+  if (!ff) { alert('ffmpeg not found in bin/ folder.'); return }
+  const bg = getRadio('avbg')
+  let imageFile = null
+  if (bg === 'image') {
+    imageFile = document.getElementById('av-img').value.trim()
+    if (!imageFile) { alert('Select a background image!'); return }
+  }
+  const outDir = document.getElementById('av-out').value.trim()
+  const base   = audioFile.split(/[\\/]/).pop().replace(/\.[^.]+$/, '')
+  const outputFile = outDir + '/' + base + '.mp4'
+  const resolution = getRadio('avres')
+
+  setBtn('av-btn', true)
+  setStatus('av-status','Converting…','active')
+  document.getElementById('av-prog').style.width = '0%'
+  try {
+    await api.avConvert({ audioFile, imageFile, outputFile, resolution })
+    setStatus('av-status','Done! ✓','ok')
+    document.getElementById('av-prog').style.width = '100%'
+  } catch(e) {
+    setStatus('av-status','Error: ' + e,'err')
+  } finally {
+    setBtn('av-btn', false)
+  }
+}
+
+// ─── Trim slider ──────────────────────────────────────────────────
+let sliderEnabled = false
+let startFrac = 0, endFrac = 1
+let dragging = null
+const PAD=14, HR=9, TH=5
+
+function toggleTrim() {
+  sliderEnabled = !sliderEnabled
+  const sw   = document.getElementById('trim-switch')
+  const ctrl = document.getElementById('trim-controls')
+  sw.classList.toggle('on', sliderEnabled)
+  ctrl.classList.toggle('visible', sliderEnabled)
+  drawSlider()
+}
+
+function initSlider(dur) {
+  startFrac = 0; endFrac = 1
+  document.getElementById('trim-start').value = '00:00:00'
+  document.getElementById('trim-end').value   = secsToHms(dur)
+  drawSlider()
+}
+
+function drawSlider() {
+  const c = document.getElementById('slider')
+  if (!c) return
+  const ctx = c.getContext('2d')
+  const W = c.offsetWidth; c.width = W; const H = 30
+  const cy = H/2, x0 = PAD+HR, x1 = W-PAD-HR, span = x1-x0
+  ctx.clearRect(0,0,W,H)
+  ctx.fillStyle = '#2e2e2e'
+  ctx.roundRect(x0,cy-TH/2,span,TH,2); ctx.fill()
+  const sx = x0+startFrac*span, ex = x0+endFrac*span
+  ctx.fillStyle = sliderEnabled ? '#00d4ff' : '#1a4a5a'
+  ctx.fillRect(sx,cy-TH/2,ex-sx,TH)
+  for (const fx of [sx,ex]) {
+    ctx.beginPath(); ctx.arc(fx,cy,HR,0,Math.PI*2)
+    ctx.fillStyle = '#1a1a1a'; ctx.fill()
+    ctx.strokeStyle = sliderEnabled ? '#00d4ff' : '#444'; ctx.lineWidth=2; ctx.stroke()
+  }
+}
+
+function sliderFracToX(frac) {
+  const c = document.getElementById('slider')
+  const x0=PAD+HR, x1=c.offsetWidth-PAD-HR
+  return x0+frac*(x1-x0)
+}
+function sliderXToFrac(x) {
+  const c = document.getElementById('slider')
+  const x0=PAD+HR, x1=c.offsetWidth-PAD-HR
+  return Math.max(0,Math.min(1,(x-x0)/(x1-x0)))
+}
+
+const sliderEl = document.getElementById('slider')
+sliderEl.addEventListener('mousedown', e => {
+  if (!sliderEnabled) return
+  const r = HR+4
+  const sx=sliderFracToX(startFrac), ex=sliderFracToX(endFrac)
+  const ds=Math.abs(e.offsetX-sx), de=Math.abs(e.offsetX-ex)
+  if (ds<=r && ds<=de) dragging='start'
+  else if (de<=r)      dragging='end'
+})
+window.addEventListener('mousemove', e => {
+  if (!dragging || !sliderEnabled) return
+  const rect = sliderEl.getBoundingClientRect()
+  const f = sliderXToFrac(e.clientX - rect.left)
+  if (dragging==='start') startFrac = Math.min(f, endFrac-.001)
+  else                    endFrac   = Math.max(f, startFrac+.001)
+  syncEntries(); drawSlider()
+})
+window.addEventListener('mouseup', () => { dragging=null })
+
+function syncEntries() {
+  document.getElementById('trim-start').value = secsToHms(Math.round(startFrac*videoDuration))
+  document.getElementById('trim-end').value   = secsToHms(Math.round(endFrac  *videoDuration))
+}
+
+;['trim-start','trim-end'].forEach(id => {
+  const el = document.getElementById(id)
+  const update = () => {
+    if (!videoDuration) return
+    if (id==='trim-start') {
+      let s = Math.max(0, Math.min(parseHms(el.value), Math.round(endFrac*videoDuration)-1))
+      startFrac = s/videoDuration; el.value = secsToHms(s)
+    } else {
+      let s = Math.max(Math.round(startFrac*videoDuration)+1, Math.min(parseHms(el.value), videoDuration))
+      endFrac = s/videoDuration; el.value = secsToHms(s)
+    }
+    drawSlider()
+  }
+  el.addEventListener('blur', update)
+  el.addEventListener('keydown', e => { if(e.key==='Enter') update() })
+})
+
+// ─── Utils ────────────────────────────────────────────────────────
+function secsToHms(s) {
+  s=Math.max(0,Math.floor(s))
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+}
+function parseHms(str) {
+  try {
+    const p=str.split(':')
+    if(p.length===3) return +p[0]*3600 + +p[1]*60 + +p[2]
+    if(p.length===2) return +p[0]*60   + +p[1]
+    return +str
+  } catch{ return 0 }
+}
+
+// Initial slider draw
+drawSlider()
+window.addEventListener('resize', drawSlider)
+</script>
+</body>
+</html>
